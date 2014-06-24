@@ -5,6 +5,8 @@ SQL session store for the [Gorilla web toolkit](http://www.gorillatoolkit.org).
 Work in progress, API may not be stable. Currently only supports the PostgreSQL
 dialect.
 
+[![Build Status](https://travis-ci.org/jstemmer/sqlstore.svg?branch=master)](https://travis-ci.org/jstemmer/sqlstore)
+
 ## Usage
 
 See the [Gorilla toolkit sessions
