@@ -1,10 +1,30 @@
 # sqlstore
 
-SQL session store for the Gorilla web toolkit.
+SQL session store for the [Gorilla web toolkit](http://www.gorillatoolkit.org).
 
-Currently only supports the PostgreSQL dialect.
+Work in progress, API may not be stable. Currently only supports the PostgreSQL
+dialect.
 
-Requires a `sessions` table:
+## Usage
+
+See the [Gorilla toolkit sessions
+documentation](http://www.gorillatoolkit.org/pkg/sessions) on how to use the
+sessions package.
+
+Get the package `go get github.com/jstemmer/sqlstore` and import
+`github.com/jstemmer/sqlstore`.
+
+Call `sqlstore.New()` to create a new store. You'll need a database handle from
+the `database/sql` package. See the
+[session.NewCookieStore](http://www.gorillatoolkit.org/pkg/sessions#NewCookieStore)
+documentation on how to use the keyPairs parameter.
+
+```go
+store := sqlstore.New(db, []byte("something-very-secret"))
+```
+
+Sessions are stored in a `sessions` table, which is assumed to exist. It should
+have the following schema:
 
 ```sql
 CREATE TABLE sessions (
@@ -14,3 +34,11 @@ CREATE TABLE sessions (
 	updated_at timestamp NOT NULL
 );
 ```
+
+## Documentation
+
+http://godoc.org/github.com/jstemmer/sqlstore
+
+## License
+
+MIT, see LICENSE.
