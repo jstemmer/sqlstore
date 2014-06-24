@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/base32"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
@@ -70,9 +71,13 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 
 func (s *SQLStore) load(session *sessions.Session) error {
 	var data string
-	row := s.db.QueryRow("SELECT data FROM sessions WHERE id = $1 LIMIT 1", session.ID)
-	if err := row.Scan(&data); err != nil {
+	var updatedAt time.Time
+	row := s.db.QueryRow("SELECT data, updated_at FROM sessions WHERE id = $1 LIMIT 1", session.ID)
+	if err := row.Scan(&data, &updatedAt); err != nil {
 		return err
+	}
+	if updatedAt.Add(time.Duration(s.Options.MaxAge) * time.Second).Before(time.Now().UTC()) {
+		return s.destroy(session)
 	}
 	return securecookie.DecodeMulti(session.Name(), data, &session.Values, s.codecs...)
 }
