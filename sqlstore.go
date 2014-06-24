@@ -85,9 +85,9 @@ func (s *SQLStore) save(session *sessions.Session) error {
 
 	var query string
 	if session.IsNew {
-		query = "INSERT INTO sessions(id, data) VALUES ($1, $2)"
+		query = "INSERT INTO sessions(id, data, created_at, updated_at) VALUES ($1, $2, NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC')"
 	} else {
-		query = "UPDATE sessions SET data=$2 WHERE id=$1"
+		query = "UPDATE sessions SET data=$2, updated_at=(NOW() AT TIME ZONE 'UTC') WHERE id=$1"
 	}
 
 	_, err = s.db.Exec(query, session.ID, encoded)

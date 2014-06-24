@@ -7,5 +7,10 @@ Currently only supports the PostgreSQL dialect.
 Requires a `sessions` table:
 
 ```sql
-CREATE TABLE sessions (id varchar(100) PRIMARY KEY, data text NOT NULL);
+CREATE TABLE sessions (
+	id varchar(100) PRIMARY KEY,
+	data text NOT NULL,
+	created_at timestamp NOT NULL,
+	updated_at timestamp NOT NULL
+);
 ```
