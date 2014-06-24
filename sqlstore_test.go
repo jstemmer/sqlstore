@@ -6,6 +6,7 @@ import (
 )
 
 func TestImplementsGorillaSessionStore(t *testing.T) {
-	var store sessions.Store = New(nil, nil)
+	var store sessions.Store
+	store = New(nil, nil)
 	_ = store
 }

@@ -10,12 +10,15 @@ import (
 	"github.com/gorilla/sessions"
 )
 
+// SQLStore stores gorilla sessions in a database.
 type SQLStore struct {
 	Options *sessions.Options
 	codecs  []securecookie.Codec
 	db      *sql.DB
 }
 
+// New returns a new SQLStore. The keyPairs are used in the same way as the
+// gorilla sessions CookieStore.
 func New(db *sql.DB, keyPairs ...[]byte) *SQLStore {
 	return &SQLStore{
 		Options: &sessions.Options{
@@ -27,10 +30,14 @@ func New(db *sql.DB, keyPairs ...[]byte) *SQLStore {
 	}
 }
 
+// Get returns a cached session.
 func (s *SQLStore) Get(r *http.Request, name string) (*sessions.Session, error) {
 	return sessions.GetRegistry(r).Get(s, name)
 }
 
+// New creates a new session for the given request r. If the request contains a
+// valid session ID for an existing, non-expired session, then this session
+// will be loaded from the database.
 func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) {
 	session := sessions.NewSession(s, name)
 	opts := *s.Options
@@ -47,6 +54,8 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	return session, err
 }
 
+// Save stores the session in the database. If session.Options.MaxAge is < 0,
+// the session is deleted from the database.
 func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *sessions.Session) error {
 	if session.Options.MaxAge < 0 {
 		err := s.destroy(session)
