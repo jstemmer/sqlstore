@@ -46,7 +46,8 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	var err error
 	if c, errCookie := r.Cookie(name); errCookie == nil {
 		if err = securecookie.DecodeMulti(name, c.Value, &session.ID, s.codecs...); err == nil {
-			if err = s.load(session); err == nil {
+			var exists bool
+			if exists, err = s.load(session); err == nil && exists {
 				session.IsNew = false
 			}
 		}
@@ -78,17 +79,23 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 	return nil
 }
 
-func (s *SQLStore) load(session *sessions.Session) error {
+// load loads the session identified by its ID from the database. If the
+// session has expired, it is destroyed. If no session could be found, exists
+// will be false and no error will be returned.
+func (s *SQLStore) load(session *sessions.Session) (exists bool, err error) {
 	var data string
 	var updatedAt time.Time
 	row := s.db.QueryRow("SELECT data, updated_at FROM sessions WHERE id = $1 LIMIT 1", session.ID)
 	if err := row.Scan(&data, &updatedAt); err != nil {
-		return err
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, err
 	}
 	if updatedAt.Add(time.Duration(s.Options.MaxAge) * time.Second).Before(time.Now().UTC()) {
-		return s.destroy(session)
+		return false, s.destroy(session)
 	}
-	return securecookie.DecodeMulti(session.Name(), data, &session.Values, s.codecs...)
+	return true, securecookie.DecodeMulti(session.Name(), data, &session.Values, s.codecs...)
 }
 
 func (s *SQLStore) save(session *sessions.Session) error {
