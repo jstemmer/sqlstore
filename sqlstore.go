@@ -47,6 +47,12 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 }
 
 func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *sessions.Session) error {
+	if session.Options.MaxAge < 0 {
+		err := s.destroy(session)
+		http.SetCookie(w, sessions.NewCookie(session.Name(), "", session.Options))
+		return err
+	}
+
 	if len(session.ID) == 0 {
 		session.ID = base32.StdEncoding.EncodeToString(securecookie.GenerateRandomKey(32))
 	}
@@ -85,5 +91,10 @@ func (s *SQLStore) save(session *sessions.Session) error {
 	}
 
 	_, err = s.db.Exec(query, session.ID, encoded)
+	return err
+}
+
+func (s *SQLStore) destroy(session *sessions.Session) error {
+	_, err := s.db.Exec("DELETE FROM sessions WHERE ID=$1", session.ID)
 	return err
 }
