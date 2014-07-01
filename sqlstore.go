@@ -1,8 +1,10 @@
 package sqlstore
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base32"
+	"encoding/gob"
 	"net/http"
 	"time"
 
@@ -83,7 +85,7 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 // session has expired, it is destroyed. If no session could be found, exists
 // will be false and no error will be returned.
 func (s *SQLStore) load(session *sessions.Session) (exists bool, err error) {
-	var data string
+	var data []byte
 	var updatedAt time.Time
 	row := s.db.QueryRow("SELECT data, updated_at FROM sessions WHERE id = $1 LIMIT 1", session.ID)
 	if err := row.Scan(&data, &updatedAt); err != nil {
@@ -95,12 +97,12 @@ func (s *SQLStore) load(session *sessions.Session) (exists bool, err error) {
 	if updatedAt.Add(time.Duration(s.Options.MaxAge) * time.Second).Before(time.Now().UTC()) {
 		return false, s.destroy(session)
 	}
-	return true, securecookie.DecodeMulti(session.Name(), data, &session.Values, s.codecs...)
+	return true, gob.NewDecoder(bytes.NewBuffer(data)).Decode(&session.Values)
 }
 
 func (s *SQLStore) save(session *sessions.Session) error {
-	encoded, err := securecookie.EncodeMulti(session.Name(), session.Values, s.codecs...)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(session.Values); err != nil {
 		return err
 	}
 
@@ -111,7 +113,7 @@ func (s *SQLStore) save(session *sessions.Session) error {
 		query = "UPDATE sessions SET data=$2, updated_at=(NOW() AT TIME ZONE 'UTC') WHERE id=$1"
 	}
 
-	_, err = s.db.Exec(query, session.ID, encoded)
+	_, err := s.db.Exec(query, session.ID, buf.Bytes())
 	return err
 }
 

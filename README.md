@@ -31,7 +31,7 @@ have the following schema:
 ```sql
 CREATE TABLE sessions (
 	id varchar(100) PRIMARY KEY,
-	data text NOT NULL,
+	data bytea NOT NULL,
 	created_at timestamp NOT NULL,
 	updated_at timestamp NOT NULL
 );
