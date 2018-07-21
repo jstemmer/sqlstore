@@ -1,8 +1,9 @@
 package sqlstore
 
 import (
-	"github.com/gorilla/sessions"
 	"testing"
+
+	"github.com/gorilla/sessions"
 )
 
 func TestImplementsGorillaSessionStore(t *testing.T) {
