@@ -16,12 +16,24 @@ import (
 type SQLStore struct {
 	Options *sessions.Options
 	codecs  []securecookie.Codec
-	db      *sql.DB
+	db      Database
+}
+
+// Database describes a session store database interface.
+type Database interface {
+	Load(id string) (updatedAt time.Time, data []byte, err error)
+	Insert(id string, data []byte) error
+	Update(id string, data []byte) error
+	Delete(id string) error
+}
+
+var generateSessionID = func() string {
+	return base32.StdEncoding.EncodeToString(securecookie.GenerateRandomKey(32))
 }
 
 // New returns a new SQLStore. The keyPairs are used in the same way as the
 // gorilla sessions CookieStore.
-func New(db *sql.DB, keyPairs ...[]byte) *SQLStore {
+func New(db Database, keyPairs ...[]byte) *SQLStore {
 	return &SQLStore{
 		Options: &sessions.Options{
 			Path:   "/",
@@ -49,7 +61,7 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	if c, errCookie := r.Cookie(name); errCookie == nil {
 		if err = securecookie.DecodeMulti(name, c.Value, &session.ID, s.codecs...); err == nil {
 			var exists bool
-			if exists, err = s.load(session); err == nil && exists {
+			if exists, err = s.loadFromDatabase(session); err == nil && exists {
 				session.IsNew = false
 			}
 		}
@@ -61,16 +73,16 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 // the session is deleted from the database.
 func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *sessions.Session) error {
 	if session.Options.MaxAge < 0 {
-		err := s.destroy(session)
+		err := s.db.Delete(session.ID)
 		http.SetCookie(w, sessions.NewCookie(session.Name(), "", session.Options))
 		return err
 	}
 
 	if len(session.ID) == 0 {
-		session.ID = base32.StdEncoding.EncodeToString(securecookie.GenerateRandomKey(32))
+		session.ID = generateSessionID()
 	}
 
-	if err := s.save(session); err != nil {
+	if err := s.saveToDatabase(session); err != nil {
 		return err
 	}
 	encoded, err := securecookie.EncodeMulti(session.Name(), session.ID, s.codecs...)
@@ -81,43 +93,31 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 	return nil
 }
 
-// load loads the session identified by its ID from the database. If the
-// session has expired, it is destroyed. If no session could be found, exists
-// will be false and no error will be returned.
-func (s *SQLStore) load(session *sessions.Session) (exists bool, err error) {
-	var data []byte
-	var updatedAt time.Time
-	row := s.db.QueryRow("SELECT data, updated_at FROM sessions WHERE id = $1 LIMIT 1", session.ID)
-	if err := row.Scan(&data, &updatedAt); err != nil {
+// loadFromDatabase loads the session identified by its ID from the database.
+// If the session has expired, it is destroyed. If no session could be found,
+// exists will be false and no error will be returned.
+func (s *SQLStore) loadFromDatabase(session *sessions.Session) (exists bool, err error) {
+	updatedAt, data, err := s.db.Load(session.ID)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
 		}
 		return false, err
 	}
 	if updatedAt.Add(time.Duration(s.Options.MaxAge) * time.Second).Before(time.Now().UTC()) {
-		return false, s.destroy(session)
+		return false, s.db.Delete(session.ID)
 	}
 	return true, gob.NewDecoder(bytes.NewBuffer(data)).Decode(&session.Values)
 }
 
-func (s *SQLStore) save(session *sessions.Session) error {
+// saveToDatabase stores session in the database.
+func (s *SQLStore) saveToDatabase(session *sessions.Session) error {
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(session.Values); err != nil {
 		return err
 	}
-
-	var query string
-	if session.IsNew {
-		query = "INSERT INTO sessions(id, data, created_at, updated_at) VALUES ($1, $2, NOW() AT TIME ZONE 'UTC', NOW() AT TIME ZONE 'UTC')"
-	} else {
-		query = "UPDATE sessions SET data=$2, updated_at=(NOW() AT TIME ZONE 'UTC') WHERE id=$1"
+	if !session.IsNew {
+		return s.db.Update(session.ID, buf.Bytes())
 	}
-
-	_, err := s.db.Exec(query, session.ID, buf.Bytes())
-	return err
-}
-
-func (s *SQLStore) destroy(session *sessions.Session) error {
-	_, err := s.db.Exec("DELETE FROM sessions WHERE ID=$1", session.ID)
-	return err
+	return s.db.Insert(session.ID, buf.Bytes())
 }
