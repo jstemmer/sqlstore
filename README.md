@@ -3,7 +3,8 @@
 SQL session store for the [Gorilla web toolkit](http://www.gorillatoolkit.org).
 
 Work in progress, API may not be stable. Currently only supports the PostgreSQL
-dialect.
+dialect for either the stdlib database/sql package or the
+[pgx](https://github.com/jackc/pgx) driver.
 
 [![Build Status](https://travis-ci.org/jstemmer/sqlstore.svg?branch=master)](https://travis-ci.org/jstemmer/sqlstore)
 
