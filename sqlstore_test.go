@@ -1,6 +1,7 @@
 package sqlstore
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,7 +26,7 @@ type testDatabase struct {
 	data   []byte
 }
 
-func (db *testDatabase) Load(id string) (updatedAt time.Time, data []byte, err error) {
+func (db *testDatabase) Load(ctx context.Context, id string) (updatedAt time.Time, data []byte, err error) {
 	db.t.Logf("testDatabase.Load(%s)", id)
 	db.calls++
 	db.action = "select"
@@ -33,7 +34,7 @@ func (db *testDatabase) Load(id string) (updatedAt time.Time, data []byte, err e
 	return time.Now(), db.data, nil
 }
 
-func (db *testDatabase) Insert(id string, data []byte) error {
+func (db *testDatabase) Insert(ctx context.Context, id string, data []byte) error {
 	db.t.Logf("testDatabase.Insert(%s, [data:%d bytes])", id, len(data))
 	db.calls++
 	db.action = "insert"
@@ -42,7 +43,7 @@ func (db *testDatabase) Insert(id string, data []byte) error {
 	return nil
 }
 
-func (db *testDatabase) Update(id string, data []byte) error {
+func (db *testDatabase) Update(ctx context.Context, id string, data []byte) error {
 	db.t.Logf("testDatabase.Update(%s, %x)", id, data)
 	db.calls++
 	db.action = "update"
@@ -51,7 +52,7 @@ func (db *testDatabase) Update(id string, data []byte) error {
 	return nil
 }
 
-func (db *testDatabase) Delete(id string) error {
+func (db *testDatabase) Delete(ctx context.Context, id string) error {
 	db.t.Logf("testDatabase.Delete(%s)", id)
 	db.calls++
 	db.action = "delete"

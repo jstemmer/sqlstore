@@ -2,6 +2,7 @@ package sqlstore
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base32"
 	"encoding/gob"
@@ -21,10 +22,10 @@ type SQLStore struct {
 
 // Database describes a session store database interface.
 type Database interface {
-	Load(id string) (updatedAt time.Time, data []byte, err error)
-	Insert(id string, data []byte) error
-	Update(id string, data []byte) error
-	Delete(id string) error
+	Load(ctx context.Context, id string) (updatedAt time.Time, data []byte, err error)
+	Insert(ctx context.Context, id string, data []byte) error
+	Update(ctx context.Context, id string, data []byte) error
+	Delete(ctx context.Context, id string) error
 }
 
 var generateSessionID = func() string {
@@ -61,7 +62,7 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	if c, errCookie := r.Cookie(name); errCookie == nil {
 		if err = securecookie.DecodeMulti(name, c.Value, &session.ID, s.codecs...); err == nil {
 			var exists bool
-			if exists, err = s.loadFromDatabase(session); err == nil && exists {
+			if exists, err = s.loadFromDatabase(r.Context(), session); err == nil && exists {
 				session.IsNew = false
 			}
 		}
@@ -73,7 +74,7 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 // the session is deleted from the database.
 func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *sessions.Session) error {
 	if session.Options.MaxAge < 0 {
-		err := s.db.Delete(session.ID)
+		err := s.db.Delete(r.Context(), session.ID)
 		http.SetCookie(w, sessions.NewCookie(session.Name(), "", session.Options))
 		return err
 	}
@@ -82,7 +83,7 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 		session.ID = generateSessionID()
 	}
 
-	if err := s.saveToDatabase(session); err != nil {
+	if err := s.saveToDatabase(r.Context(), session); err != nil {
 		return err
 	}
 	encoded, err := securecookie.EncodeMulti(session.Name(), session.ID, s.codecs...)
@@ -96,8 +97,8 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 // loadFromDatabase loads the session identified by its ID from the database.
 // If the session has expired, it is destroyed. If no session could be found,
 // exists will be false and no error will be returned.
-func (s *SQLStore) loadFromDatabase(session *sessions.Session) (exists bool, err error) {
-	updatedAt, data, err := s.db.Load(session.ID)
+func (s *SQLStore) loadFromDatabase(ctx context.Context, session *sessions.Session) (exists bool, err error) {
+	updatedAt, data, err := s.db.Load(ctx, session.ID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return false, nil
@@ -105,19 +106,19 @@ func (s *SQLStore) loadFromDatabase(session *sessions.Session) (exists bool, err
 		return false, err
 	}
 	if updatedAt.Add(time.Duration(s.Options.MaxAge) * time.Second).Before(time.Now().UTC()) {
-		return false, s.db.Delete(session.ID)
+		return false, s.db.Delete(ctx, session.ID)
 	}
 	return true, gob.NewDecoder(bytes.NewBuffer(data)).Decode(&session.Values)
 }
 
 // saveToDatabase stores session in the database.
-func (s *SQLStore) saveToDatabase(session *sessions.Session) error {
+func (s *SQLStore) saveToDatabase(ctx context.Context, session *sessions.Session) error {
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(session.Values); err != nil {
 		return err
 	}
 	if !session.IsNew {
-		return s.db.Update(session.ID, buf.Bytes())
+		return s.db.Update(ctx, session.ID, buf.Bytes())
 	}
-	return s.db.Insert(session.ID, buf.Bytes())
+	return s.db.Insert(ctx, session.ID, buf.Bytes())
 }
