@@ -58,11 +58,12 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	opts := *s.Options
 	session.Options = &opts
 	session.IsNew = true
+	ctx := context.Background()
 	var err error
 	if c, errCookie := r.Cookie(name); errCookie == nil {
 		if err = securecookie.DecodeMulti(name, c.Value, &session.ID, s.codecs...); err == nil {
 			var exists bool
-			if exists, err = s.loadFromDatabase(r.Context(), session); err == nil && exists {
+			if exists, err = s.loadFromDatabase(ctx, session); err == nil && exists {
 				session.IsNew = false
 			}
 		}
@@ -73,8 +74,9 @@ func (s *SQLStore) New(r *http.Request, name string) (*sessions.Session, error) 
 // Save stores the session in the database. If session.Options.MaxAge is < 0,
 // the session is deleted from the database.
 func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *sessions.Session) error {
+	ctx := context.Background()
 	if session.Options.MaxAge < 0 {
-		err := s.db.Delete(r.Context(), session.ID)
+		err := s.db.Delete(ctx, session.ID)
 		http.SetCookie(w, sessions.NewCookie(session.Name(), "", session.Options))
 		return err
 	}
@@ -83,7 +85,7 @@ func (s *SQLStore) Save(r *http.Request, w http.ResponseWriter, session *session
 		session.ID = generateSessionID()
 	}
 
-	if err := s.saveToDatabase(r.Context(), session); err != nil {
+	if err := s.saveToDatabase(ctx, session); err != nil {
 		return err
 	}
 	encoded, err := securecookie.EncodeMulti(session.Name(), session.ID, s.codecs...)
